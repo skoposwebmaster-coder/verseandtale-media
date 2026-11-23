@@ -1,0 +1,32 @@
+window.__sleep = ms => new Promise(r=>setTimeout(r,ms));
+window.__until = async (fn, ms) => { const t0=Date.now(); while (Date.now()-t0<ms) { try { const v = fn(); if (v) return v; } catch(e){} await __sleep(500); } return null; };
+window.__file = async (url, name, type) => { const b = await fetch(url).then(r=>r.blob()); return new File([b], name, {type}); };
+window.__hash = async (blob) => { const h = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); };
+window.__setv = (el, v) => { const proto = el.tagName==='TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(el, v); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
+window.__run = async (i) => { const L = []; window.__L = 'running'; try {
+  const sp = await fetch('https://raw.githubusercontent.com/skoposwebmaster-coder/verseandtale-media/batch-d19-spotify/d19-spotify.json').then(r=>r.json()); const e = sp[i]; L.push(e.day+' '+e.slug);
+  const inp = await __until(()=>document.querySelector('#uploadAreaInput[accept*=mp4]'), 20000); if (!inp) throw 'no upload input';
+  const f = await __file(e.video, e.slug+'.D19.mp4', 'video/mp4'); if ((await __hash(f)) !== e.sha) throw 'video hash mismatch';
+  const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event('change',{bubbles:true}));
+  const t = await __until(()=>document.querySelector('#title-input'), 120000); if (!t) throw 'no title input';
+  await __until(()=>/Preview ready/.test(document.body.innerText), 120000);
+  __setv(t, e.title); if (t.value !== e.title) throw 'title';
+  let ta = document.querySelector('textarea[name=description]');
+  if (!ta) { [...document.querySelectorAll('input[type=checkbox]')].find(c=>!c.name).click(); ta = await __until(()=>document.querySelector('textarea[name=description]'), 5000); }
+  if (!ta) throw 'no textarea'; __setv(ta, e.desc); if (ta.value !== e.desc) throw 'desc';
+  const img = [...document.querySelectorAll('input[type=file]')].find(x=>x.accept.startsWith('image/'));
+  const tf = await __file(e.thumb, e.slug+'.thumbnail.png', 'image/png'); const dt2 = new DataTransfer(); dt2.items.add(tf); img.files = dt2.files; img.dispatchEvent(new Event('change',{bubbles:true}));
+  const sel = await __until(()=>[...document.querySelectorAll('button[role=radio][aria-checked=true]')].find(b=>(b.querySelector('img')||{}).naturalWidth===1920), 20000); if (!sel) throw 'thumbnail not selected';
+  if (!document.querySelector('#full-episode').checked || ['isVideoEighteenPlus','podcastEpisodeIsExplicit','podcastEpisodeContainsSponsoredContent'].some(n=>document.querySelector('[name='+n+']').checked)) throw 'settings';
+  L.push('details ok'); window.__ep = location.pathname.split('/')[5]; L.push('ep '+window.__ep);
+  [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Next').click();
+  const sch = await __until(()=>document.querySelector('#publish-date-schedule'), 30000); if (!sch) throw 'no review';
+  (document.querySelector('label[for=publish-date-schedule]')||sch).click(); await __sleep(800);
+  [...document.querySelectorAll('button')].find(b=>/^\d{1,2}\/\d{1,2}\/2026$/.test(b.textContent.trim())).click(); await __sleep(800);
+  const dd = new Date(e.date+'T12:00:00'); const lab = dd.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  const td = await __until(()=>[...document.querySelectorAll('td[aria-label]')].find(x=>x.getAttribute('aria-label').replace(/^Selected\. /,'')===lab), 5000); if (!td) throw 'no td '+lab;
+  (td.querySelector('button,div,span')||td).click(); td.click(); await __sleep(800);
+  const db = [...document.querySelectorAll('button')].find(b=>/^\d{1,2}\/\d{1,2}\/2026$/.test(b.textContent.trim())).textContent.trim();
+  const want = (+e.date.slice(5,7))+'/'+(+e.date.slice(8,10))+'/'+e.date.slice(0,4); if (db !== want) throw 'date '+db;
+  L.push('date ok '+db); L.push('READY'); } catch(err) { L.push('ERR '+err); } window.__L = L; return L; };
+window.__chk = () => JSON.stringify({h: document.querySelector('[aria-label="Hour picker"]').value, m: document.querySelector('[aria-label="Minute picker"]').value, ap: document.querySelector('[aria-label="Meridiem picker"]').value, d: [...document.querySelectorAll('button')].find(b=>/^\d{1,2}\/\d{1,2}\/2026$/.test(b.textContent.trim())).textContent, tz: document.body.innerText.includes('(GMT+1)')});
